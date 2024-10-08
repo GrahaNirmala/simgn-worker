@@ -1,0 +1,40 @@
+name: CI-CD
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ci-cd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: "secret"
+
+      - name: Adding Known Hosts
+        run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/sim-graha-nirmala-worker:dev
+
+      - name: Deploy
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd /opt/sastrakode/sim-graha-nirmala/dev && docker compose down worker"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd /opt/sastrakode/sim-graha-nirmala/dev && docker compose pull worker"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd /opt/sastrakode/sim-graha-nirmala/dev && docker compose up -d worker"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "docker system prune -af"
